@@ -1,7 +1,6 @@
 package channelops
 
 import (
-	"fmt"
 	"reflect"
 )
 
@@ -22,7 +21,6 @@ func (co *channelOps) MergeOrToOne(orChans ...chan any) chan any {
 		case co.orInterupt <- struct{}{}:
 			// try to trigger a stop if a goroutine is already running
 		case <-co.done:
-			fmt.Println("returning on done")
 			// capture race where another thread may have triggered the same time as this call
 			return co.orChan
 		}
