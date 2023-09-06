@@ -49,5 +49,6 @@ func (co *channelOps) stop() {
 			close(co.orInterupt)
 		}
 		close(co.done)
+		close(co.orChan)
 	})
 }

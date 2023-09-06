@@ -11,7 +11,7 @@ import (
 // In addition to this, as long as the merge chan referance is kept, the orChans can all be
 // added asynchronously
 func (co *channelOps) MergeOrToOne(orChans ...chan any) chan any {
-	co.lock.Lock()
+	co.lock.Lock() // there is a race with this lock... needs to be done better
 	defer co.lock.Unlock()
 
 	select {
@@ -49,19 +49,34 @@ func (co *channelOps) MergeOrToOne(orChans ...chan any) chan any {
 		co.selectCases = append(co.selectCases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(orChan)})
 	}
 
-	go func() {
-		index, value, _ := reflect.Select(co.selectCases)
-		switch index {
-		case 0:
-			co.orInterupt <- struct{}{}
-		case 1:
-			// the caller canceld, so close out this 1 time use behavior
-			co.stop()
-		default:
+	go co.backgroundMergeOrToOne(co.selectCases)
+
+	return co.orChan
+}
+
+func (co *channelOps) backgroundMergeOrToOne(cases []reflect.SelectCase) {
+	index, value, received := reflect.Select(cases)
+	switch index {
+	case 0:
+		// interupted since the caller wants to add more channels
+		co.orInterupt <- struct{}{}
+	case 1:
+		// the caller cancelled, so close out this 1 time use behavior
+		co.stop()
+	default:
+		if !received {
+			// this is a case where the caller closed a channel. We need to reset
+			co.lock.Lock()
+			co.selectCases[index] = co.selectCases[len(co.selectCases)-1] // copy last index into the one we want to drop from being closed
+			co.selectCases = co.selectCases[:len(co.selectCases)-1]       // truncate the select cases
+			co.lock.Unlock()
+
+			// setup new bacground thread
+			go co.backgroundMergeOrToOne(co.selectCases)
+		} else {
+			// have a value to return the caller
 			co.orChan <- value.Interface()
 			co.stop()
 		}
-	}()
-
-	return co.orChan
+	}
 }
