@@ -2,6 +2,7 @@ package channelops
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -66,6 +67,53 @@ func Test_MergeOrToOne(t *testing.T) {
 		}()
 
 		g.Eventually(reader).Should(Receive(BeNil()))
+		g.Eventually(reader).Should(BeClosed())
+	})
+
+	t.Run("it cloeses the merged channel if the context is closed", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		channelOps := NewChannelOps(ctx)
+
+		chanOne := make(chan any)
+		chanTwo := make(chan any)
+
+		reader := channelOps.MergeOrToOne(chanOne, chanTwo)
+
+		go func() {
+			cancel()
+		}()
+
+		g.Eventually(reader).ShouldNot(Receive())
+		g.Eventually(reader).Should(BeClosed())
+	})
+
+	t.Run("it works with a large number of processes in parallel", func(t *testing.T) {
+		done := make(chan struct{})
+		wg := new(sync.WaitGroup)
+		counter := 10_000
+		channelOps := NewChannelOps(context.Background())
+
+		reader := channelOps.MergeOrToOne(nil)
+
+		for i := 0; i < counter; i++ {
+			wg.Add(1)
+			go func(ii int) {
+				defer wg.Done()
+				channel := make(chan any)
+				_ = channelOps.MergeOrToOne(channel)
+
+				go func(num int, numChan chan any) {
+					select {
+					case numChan <- num:
+					case <-done:
+					}
+				}(ii, channel)
+			}(i)
+		}
+
+		wg.Wait()
+
+		g.Eventually(reader).Should(Receive(And(BeNumerically(">=", 0), BeNumerically("<", counter))))
 		g.Eventually(reader).Should(BeClosed())
 	})
 }
