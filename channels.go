@@ -8,6 +8,7 @@ import (
 
 type ChannelOps interface {
 	MergeOrToOne(orChans ...chan any) chan any
+	MergeOrToOneIgnoreDuplicates(orChans ...chan any) chan any
 }
 
 type channelOps struct {
