@@ -17,21 +17,27 @@ type channelOps struct {
 	stopOnce *sync.Once
 	doneOnce *sync.Once
 
-	cancelContext context.Context
+	firstCall  bool
+	orInterupt chan struct{}
+	orChan     chan any
 
-	firstCall   bool
-	orInterupt  chan struct{}
-	orChan      chan any
-	selectCases []reflect.SelectCase
+	cancelContextLength int
+	selectCases         []reflect.SelectCase
 }
 
 // Create a new single use channel operation for managing a combination
 // of possible merge stratagies.
-func NewChannelOps(cancelContext context.Context) *channelOps {
+func NewChannelOps(cancelContexts ...context.Context) *channelOps {
 	orInterupt := make(chan struct{})
+
+	// setup the interupt channel
 	selectCases := []reflect.SelectCase{
-		{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(orInterupt)},           // we want to interupt
-		{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(cancelContext.Done())}, // caller wants to cancel
+		{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(orInterupt)},
+	}
+
+	// setup the caller cancel channels
+	for _, cancelContext := range cancelContexts {
+		selectCases = append(selectCases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(cancelContext.Done())})
 	}
 
 	return &channelOps{
@@ -40,12 +46,12 @@ func NewChannelOps(cancelContext context.Context) *channelOps {
 		stopOnce: new(sync.Once),
 		doneOnce: new(sync.Once),
 
-		cancelContext: cancelContext,
+		firstCall:  true,
+		orInterupt: orInterupt,
+		orChan:     make(chan any, 1),
 
-		firstCall:   true,
-		orInterupt:  orInterupt,
-		orChan:      make(chan any, 1),
-		selectCases: selectCases,
+		cancelContextLength: len(cancelContexts),
+		selectCases:         selectCases,
 	}
 }
 

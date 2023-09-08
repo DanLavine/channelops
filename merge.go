@@ -93,13 +93,12 @@ func (co *channelOps) MergeOrToOneIgnoreDuplicates(orChans ...chan any) chan any
 
 func (co *channelOps) backgroundMergeOrToOne(cases []reflect.SelectCase) {
 	index, value, received := reflect.Select(cases)
-	switch index {
-	case 0:
+	if index == 0 {
 		// interupted since the caller wants to add more channels
-	case 1:
+	} else if index <= co.cancelContextLength {
 		// the caller cancelled, so close out this 1 time use behavior
 		co.stop()
-	default:
+	} else {
 		// if this immediately recieves, then there is a race where new caller doesn't exit
 		if !received {
 			// this is a case where the caller closed a channel. We need to remove the closed channel
