@@ -27,7 +27,7 @@ type channelOps struct {
 
 // Create a new single use channel operation for managing a combination
 // of possible merge stratagies.
-func NewChannelOps(cancelContexts ...context.Context) *channelOps {
+func NewChannelOps(cancelContexts ...context.Context) (*channelOps, chan any) {
 	orInterupt := make(chan struct{})
 
 	// setup the interupt channel
@@ -40,6 +40,7 @@ func NewChannelOps(cancelContexts ...context.Context) *channelOps {
 		selectCases = append(selectCases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(cancelContext.Done())})
 	}
 
+	orChan := make(chan any, 1)
 	return &channelOps{
 		lock:     new(sync.Mutex),
 		done:     make(chan struct{}),
@@ -48,11 +49,11 @@ func NewChannelOps(cancelContexts ...context.Context) *channelOps {
 
 		firstCall:  true,
 		orInterupt: orInterupt,
-		orChan:     make(chan any, 1),
+		orChan:     orChan,
 
 		cancelContextLength: len(cancelContexts),
 		selectCases:         selectCases,
-	}
+	}, orChan
 }
 
 func (co *channelOps) Done() <-chan struct{} {
