@@ -10,22 +10,12 @@ import (
 //
 // This function is safe to call asyncronously.
 func (co *channelOps) MergeOrToOne(orChans ...chan any) chan any {
-	co.lock.Lock()
-
-	switch co.firstCall {
-	case true:
-		co.firstCall = false
-		co.lock.Unlock()
-	default:
-		co.lock.Unlock()
-
-		select {
-		case co.orInterupt <- struct{}{}:
-			// try to trigger a stop if a goroutine is already running
-		case <-co.done:
-			// capture race where another thread may have triggered the same time as this call
-			return co.orChan
-		}
+	select {
+	case co.orInterupt <- struct{}{}:
+		// try to trigger a stop if a goroutine is already running
+	case <-co.done:
+		// capture race where another thread may have triggered the same time as this call
+		return co.orChan
 	}
 
 	// add all provided select cases
@@ -46,22 +36,12 @@ func (co *channelOps) MergeOrToOne(orChans ...chan any) chan any {
 // MergeOrToOneIgnoreDuplicates is the same as MerOrToOne, but explicitly checks to make sure that all passed in
 // channels are not already being read from. Any that are will be ignored
 func (co *channelOps) MergeOrToOneIgnoreDuplicates(orChans ...chan any) chan any {
-	co.lock.Lock()
-
-	switch co.firstCall {
-	case true:
-		co.firstCall = false
-		co.lock.Unlock()
-	default:
-		co.lock.Unlock()
-
-		select {
-		case co.orInterupt <- struct{}{}:
-			// try to trigger a stop if a goroutine is already running
-		case <-co.done:
-			// capture race where another thread may have triggered the same time as this call
-			return co.orChan
-		}
+	select {
+	case co.orInterupt <- struct{}{}:
+		// try to trigger a stop if a goroutine is already running
+	case <-co.done:
+		// capture race where another thread may have triggered the same time as this call
+		return co.orChan
 	}
 
 	// add all provided select cases

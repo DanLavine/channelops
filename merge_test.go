@@ -234,7 +234,7 @@ func Test_MergeOrToOneIgnoreDuplicates(t *testing.T) {
 		chanOne := make(chan any)
 
 		channelOps.MergeOrToOneIgnoreDuplicates(chanOne)
-		g.Expect(len(channelOps.selectCases)).To(Equal(3))
+		gExpect(len(channelOps.selectCases)).To(Equal(3))
 
 		_ = channelOps.MergeOrToOneIgnoreDuplicates(chanOne, chanOne)
 		_ = channelOps.MergeOrToOneIgnoreDuplicates(chanOne)

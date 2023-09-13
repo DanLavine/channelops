@@ -17,7 +17,6 @@ type channelOps struct {
 	stopOnce *sync.Once
 	doneOnce *sync.Once
 
-	firstCall  bool
 	orInterupt chan struct{}
 	orChan     chan any
 
@@ -41,19 +40,22 @@ func NewChannelOps(cancelContexts ...context.Context) (*channelOps, chan any) {
 	}
 
 	orChan := make(chan any, 1)
-	return &channelOps{
+	channelOps := &channelOps{
 		lock:     new(sync.Mutex),
 		done:     make(chan struct{}),
 		stopOnce: new(sync.Once),
 		doneOnce: new(sync.Once),
 
-		firstCall:  true,
 		orInterupt: orInterupt,
 		orChan:     orChan,
 
 		cancelContextLength: len(cancelContexts),
 		selectCases:         selectCases,
-	}, orChan
+	}
+
+	go channelOps.backgroundMergeOrToOne(selectCases)
+
+	return channelOps, orChan
 }
 
 func (co *channelOps) Done() <-chan struct{} {
