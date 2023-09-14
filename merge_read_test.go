@@ -68,6 +68,7 @@ func Test_MergeOrToOne(t *testing.T) {
 
 		g.Eventually(reader).Should(Receive(BeNil()))
 		g.Eventually(reader).Should(BeClosed())
+		g.Expect(channelOps.Done()).To(BeClosed())
 	})
 
 	t.Run("it cloeses the merged channel if the context is closed", func(t *testing.T) {
@@ -85,6 +86,7 @@ func Test_MergeOrToOne(t *testing.T) {
 
 		g.Eventually(reader).ShouldNot(Receive())
 		g.Eventually(reader).Should(BeClosed())
+		g.Expect(channelOps.Done()).To(BeClosed())
 	})
 
 	t.Run("it works with a large number of processes in parallel", func(t *testing.T) {
@@ -191,6 +193,7 @@ func Test_MergeOrToOneIgnoreDuplicates(t *testing.T) {
 
 		g.Eventually(reader).Should(Receive(BeNil()))
 		g.Eventually(reader).Should(BeClosed())
+		g.Expect(channelOps.Done()).To(BeClosed())
 	})
 
 	t.Run("it cloeses the merged channel if the context is closed", func(t *testing.T) {
@@ -208,6 +211,7 @@ func Test_MergeOrToOneIgnoreDuplicates(t *testing.T) {
 
 		g.Eventually(reader).ShouldNot(Receive())
 		g.Eventually(reader).Should(BeClosed())
+		g.Expect(channelOps.Done()).To(BeClosed())
 	})
 
 	t.Run("it works with a large number of processes in parallel", func(t *testing.T) {
