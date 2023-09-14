@@ -20,7 +20,8 @@ type mergeWriteChannelOps struct {
 	selectCases         []reflect.SelectCase
 }
 
-// Create a new single use channel operation for merging write channels
+// Create a new single use channel operation for merging write channels. All functions
+// for this data type are thread safe to call asynchronously
 //
 // Known limitations:
 //
