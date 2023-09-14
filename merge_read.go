@@ -26,7 +26,7 @@ type mergeReadChannelOps struct {
 // Known limitations:
 //
 // 1. Only 65535 channels can be added to a single merge strategy. (There is a way to increase this, but untill I have an actual use case for that I think its fine)
-func NewMergeWrite(cancelContexts ...context.Context) (MergeReadChannelOps, <-chan any) {
+func NewMergeRead(cancelContexts ...context.Context) (MergeReadChannelOps, <-chan any) {
 	orInterupt := make(chan struct{})
 
 	// setup the interupt channel
