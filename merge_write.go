@@ -1,21 +1,74 @@
 package channelops
 
 import (
+	"context"
+	"fmt"
 	"reflect"
+	"sync"
 )
+
+type mergeWriteChannelOps struct {
+	lock     *sync.Mutex
+	done     chan struct{}
+	stopOnce *sync.Once
+	doneOnce *sync.Once
+
+	orInterupt chan struct{}
+	orChan     chan any
+
+	cancelContextLength int
+	selectCases         []reflect.SelectCase
+}
+
+// Create a new single use channel operation for merging write channels
+//
+// Known limitations:
+//
+// 1. Only 65535 channels can be added to a single merge strategy. (There is a way to increase this, but untill I have an actual use case for that I think its fine)
+func NewMergeWrite(cancelContexts ...context.Context) (MergeWriteChannelOps, <-chan any) {
+	orInterupt := make(chan struct{})
+
+	// setup the interupt channel
+	selectCases := []reflect.SelectCase{
+		{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(orInterupt)},
+	}
+
+	// setup the caller cancel channels
+	for _, cancelContext := range cancelContexts {
+		selectCases = append(selectCases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(cancelContext.Done())})
+	}
+
+	orChan := make(chan any, 1)
+	channelOps := &mergeWriteChannelOps{
+		lock:     new(sync.Mutex),
+		done:     make(chan struct{}),
+		stopOnce: new(sync.Once),
+		doneOnce: new(sync.Once),
+
+		orInterupt: orInterupt,
+		orChan:     orChan,
+
+		cancelContextLength: len(cancelContexts),
+		selectCases:         selectCases,
+	}
+
+	go channelOps.backgroundMergeOrToOne(selectCases)
+
+	return channelOps, orChan
+}
 
 // MergeOrToOne is able to merge any number of provided channels into a single channel
 // provided that none of the passed in channels have had a value read from them. At most
 // the provided mergeChan will only process one value from any provided orChans.
 //
 // This function is safe to call asyncronously.
-func (co *channelOps) MergeOrToOne(orChans ...chan any) chan any {
+func (co *mergeWriteChannelOps) MergeOrToOne(orChans ...<-chan any) error {
 	select {
 	case co.orInterupt <- struct{}{}:
 		// try to trigger a stop if a goroutine is already running
 	case <-co.done:
 		// capture race where another thread may have triggered the same time as this call
-		return co.orChan
+		return fmt.Errorf("channel has already processed a read operation")
 	}
 
 	// add all provided select cases
@@ -29,19 +82,18 @@ func (co *channelOps) MergeOrToOne(orChans ...chan any) chan any {
 	// start the multiplexer in the background
 	go co.backgroundMergeOrToOne(cases)
 
-	// reeturn the same read channel to the caller every time
-	return co.orChan
+	return nil
 }
 
 // MergeOrToOneIgnoreDuplicates is the same as MerOrToOne, but explicitly checks to make sure that all passed in
-// channels are not already being read from. Any that are will be ignored
-func (co *channelOps) MergeOrToOneIgnoreDuplicates(orChans ...chan any) chan any {
+// channels are not already being read from. Any that are will be ignored
+func (co *mergeWriteChannelOps) MergeOrToOneIgnoreDuplicates(orChans ...<-chan any) error {
 	select {
 	case co.orInterupt <- struct{}{}:
 		// try to trigger a stop if a goroutine is already running
 	case <-co.done:
 		// capture race where another thread may have triggered the same time as this call
-		return co.orChan
+		return fmt.Errorf("channel has already processed a read operation")
 	}
 
 	// add all provided select cases
@@ -67,11 +119,10 @@ func (co *channelOps) MergeOrToOneIgnoreDuplicates(orChans ...chan any) chan any
 	// start the multiplexer in the background
 	go co.backgroundMergeOrToOne(cases)
 
-	// reeturn the same read channel to the caller every time
-	return co.orChan
+	return nil
 }
 
-func (co *channelOps) backgroundMergeOrToOne(cases []reflect.SelectCase) {
+func (co *mergeWriteChannelOps) backgroundMergeOrToOne(cases []reflect.SelectCase) {
 	index, value, received := reflect.Select(cases)
 	if index == 0 {
 		// interupted since the caller wants to add more channels
@@ -97,4 +148,17 @@ func (co *channelOps) backgroundMergeOrToOne(cases []reflect.SelectCase) {
 			co.stop()
 		}
 	}
+}
+
+func (co *mergeWriteChannelOps) closeDone() {
+	co.doneOnce.Do(func() {
+		close(co.done)
+	})
+}
+
+func (co *mergeWriteChannelOps) stop() {
+	co.stopOnce.Do(func() {
+		co.closeDone()
+		close(co.orChan)
+	})
 }
