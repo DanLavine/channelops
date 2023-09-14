@@ -243,7 +243,7 @@ func Test_MergeOrToOneIgnoreDuplicates(t *testing.T) {
 	t.Run("it only adds a channel once, no matter how many times it was attempted to be added", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		channelOpsBeforeCast, reader := NewMergeWrite(ctx)
-		channelOps := channelOpsBeforeCast.(*mergeWriteChannelOps)
+		channelOps := channelOpsBeforeCast.(*mergeReadChannelOps)
 
 		chanOne := make(chan any)
 

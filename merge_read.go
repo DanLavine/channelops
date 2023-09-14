@@ -7,7 +7,7 @@ import (
 	"sync"
 )
 
-type mergeWriteChannelOps struct {
+type mergeReadChannelOps struct {
 	lock     *sync.Mutex
 	done     chan struct{}
 	stopOnce *sync.Once
@@ -26,7 +26,7 @@ type mergeWriteChannelOps struct {
 // Known limitations:
 //
 // 1. Only 65535 channels can be added to a single merge strategy. (There is a way to increase this, but untill I have an actual use case for that I think its fine)
-func NewMergeWrite(cancelContexts ...context.Context) (MergeWriteChannelOps, <-chan any) {
+func NewMergeWrite(cancelContexts ...context.Context) (MergeReadChannelOps, <-chan any) {
 	orInterupt := make(chan struct{})
 
 	// setup the interupt channel
@@ -40,7 +40,7 @@ func NewMergeWrite(cancelContexts ...context.Context) (MergeWriteChannelOps, <-c
 	}
 
 	orChan := make(chan any, 1)
-	channelOps := &mergeWriteChannelOps{
+	channelOps := &mergeReadChannelOps{
 		lock:     new(sync.Mutex),
 		done:     make(chan struct{}),
 		stopOnce: new(sync.Once),
@@ -58,12 +58,16 @@ func NewMergeWrite(cancelContexts ...context.Context) (MergeWriteChannelOps, <-c
 	return channelOps, orChan
 }
 
+func (co *mergeReadChannelOps) Done() <-chan struct{} {
+	return co.done
+}
+
 // MergeOrToOne is able to merge any number of provided channels into a single channel
 // provided that none of the passed in channels have had a value read from them. At most
 // the provided mergeChan will only process one value from any provided orChans.
 //
 // This function is safe to call asyncronously.
-func (co *mergeWriteChannelOps) MergeOrToOne(orChans ...<-chan any) error {
+func (co *mergeReadChannelOps) MergeOrToOne(orChans ...<-chan any) error {
 	select {
 	case co.orInterupt <- struct{}{}:
 		// try to trigger a stop if a goroutine is already running
@@ -88,7 +92,7 @@ func (co *mergeWriteChannelOps) MergeOrToOne(orChans ...<-chan any) error {
 
 // MergeOrToOneIgnoreDuplicates is the same as MerOrToOne, but explicitly checks to make sure that all passed in
 // channels are not already being read from. Any that are will be ignored
-func (co *mergeWriteChannelOps) MergeOrToOneIgnoreDuplicates(orChans ...<-chan any) error {
+func (co *mergeReadChannelOps) MergeOrToOneIgnoreDuplicates(orChans ...<-chan any) error {
 	select {
 	case co.orInterupt <- struct{}{}:
 		// try to trigger a stop if a goroutine is already running
@@ -123,7 +127,7 @@ func (co *mergeWriteChannelOps) MergeOrToOneIgnoreDuplicates(orChans ...<-chan a
 	return nil
 }
 
-func (co *mergeWriteChannelOps) backgroundMergeOrToOne(cases []reflect.SelectCase) {
+func (co *mergeReadChannelOps) backgroundMergeOrToOne(cases []reflect.SelectCase) {
 	index, value, received := reflect.Select(cases)
 	if index == 0 {
 		// interupted since the caller wants to add more channels
@@ -151,13 +155,13 @@ func (co *mergeWriteChannelOps) backgroundMergeOrToOne(cases []reflect.SelectCas
 	}
 }
 
-func (co *mergeWriteChannelOps) closeDone() {
+func (co *mergeReadChannelOps) closeDone() {
 	co.doneOnce.Do(func() {
 		close(co.done)
 	})
 }
 
-func (co *mergeWriteChannelOps) stop() {
+func (co *mergeReadChannelOps) stop() {
 	co.stopOnce.Do(func() {
 		co.closeDone()
 		close(co.orChan)
