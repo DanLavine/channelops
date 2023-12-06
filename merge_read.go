@@ -7,14 +7,14 @@ import (
 	"sync"
 )
 
-type mergeReadChannelOps struct {
+type mergeReadChannelOps[T any] struct {
 	lock     *sync.Mutex
 	done     chan struct{}
 	stopOnce *sync.Once
 	doneOnce *sync.Once
 
 	orInterupt chan struct{}
-	orChan     chan any
+	orChan     chan T
 
 	cancelContextLength int
 	selectCases         []reflect.SelectCase
@@ -26,7 +26,7 @@ type mergeReadChannelOps struct {
 // Known limitations:
 //
 // 1. Only 65535 channels can be added to a single merge strategy. (There is a way to increase this, but untill I have an actual use case for that I think its fine)
-func NewMergeRead(cancelContexts ...context.Context) (MergeReadChannelOps, <-chan any) {
+func NewMergeRead[T any](cancelContexts ...context.Context) (MergeReadChannelOps[T], <-chan T) {
 	orInterupt := make(chan struct{})
 
 	// setup the interupt channel
@@ -39,8 +39,8 @@ func NewMergeRead(cancelContexts ...context.Context) (MergeReadChannelOps, <-cha
 		selectCases = append(selectCases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(cancelContext.Done())})
 	}
 
-	orChan := make(chan any, 1)
-	channelOps := &mergeReadChannelOps{
+	orChan := make(chan T, 1)
+	channelOps := &mergeReadChannelOps[T]{
 		lock:     new(sync.Mutex),
 		done:     make(chan struct{}),
 		stopOnce: new(sync.Once),
@@ -58,7 +58,7 @@ func NewMergeRead(cancelContexts ...context.Context) (MergeReadChannelOps, <-cha
 	return channelOps, orChan
 }
 
-func (co *mergeReadChannelOps) Done() <-chan struct{} {
+func (co *mergeReadChannelOps[T]) Done() <-chan struct{} {
 	return co.done
 }
 
@@ -67,7 +67,7 @@ func (co *mergeReadChannelOps) Done() <-chan struct{} {
 // the provided mergeChan will only process one value from any provided orChans.
 //
 // This function is safe to call asyncronously.
-func (co *mergeReadChannelOps) MergeOrToOne(orChans ...<-chan any) error {
+func (co *mergeReadChannelOps[T]) MergeOrToOne(orChans ...<-chan T) error {
 	select {
 	case co.orInterupt <- struct{}{}:
 		// try to trigger a stop if a goroutine is already running
@@ -92,7 +92,7 @@ func (co *mergeReadChannelOps) MergeOrToOne(orChans ...<-chan any) error {
 
 // MergeOrToOneIgnoreDuplicates is the same as MerOrToOne, but explicitly checks to make sure that all passed in
 // channels are not already being read from. Any that are will be ignored
-func (co *mergeReadChannelOps) MergeOrToOneIgnoreDuplicates(orChans ...<-chan any) error {
+func (co *mergeReadChannelOps[T]) MergeOrToOneIgnoreDuplicates(orChans ...<-chan T) error {
 	select {
 	case co.orInterupt <- struct{}{}:
 		// try to trigger a stop if a goroutine is already running
@@ -127,7 +127,7 @@ func (co *mergeReadChannelOps) MergeOrToOneIgnoreDuplicates(orChans ...<-chan an
 	return nil
 }
 
-func (co *mergeReadChannelOps) backgroundMergeOrToOne(cases []reflect.SelectCase) {
+func (co *mergeReadChannelOps[T]) backgroundMergeOrToOne(cases []reflect.SelectCase) {
 	index, value, received := reflect.Select(cases)
 	if index == 0 {
 		// interupted since the caller wants to add more channels
@@ -149,19 +149,25 @@ func (co *mergeReadChannelOps) backgroundMergeOrToOne(cases []reflect.SelectCase
 			co.closeDone()
 
 			// have a value to return the caller
-			co.orChan <- value.Interface()
+			if value.IsNil() {
+				// nothing to do here. the caller will be closed in the nil case
+				var empty T
+				co.orChan <- empty
+			} else {
+				co.orChan <- value.Interface().(T) // cast to the type of channel we are
+			}
 			co.stop()
 		}
 	}
 }
 
-func (co *mergeReadChannelOps) closeDone() {
+func (co *mergeReadChannelOps[T]) closeDone() {
 	co.doneOnce.Do(func() {
 		close(co.done)
 	})
 }
 
-func (co *mergeReadChannelOps) stop() {
+func (co *mergeReadChannelOps[T]) stop() {
 	co.stopOnce.Do(func() {
 		co.closeDone()
 		close(co.orChan)

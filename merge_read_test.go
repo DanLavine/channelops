@@ -12,7 +12,7 @@ func Test_MergeOrToOne(t *testing.T) {
 	g := NewGomegaWithT(t)
 
 	t.Run("it ensures only one possible channel is read from", func(t *testing.T) {
-		channelOps, reader := NewMergeRead(context.Background())
+		channelOps, reader := NewMergeRead[any](context.Background())
 
 		chanOne := make(chan any)
 		chanTwo := make(chan any)
@@ -39,7 +39,7 @@ func Test_MergeOrToOne(t *testing.T) {
 	})
 
 	t.Run("it allows for passed in channels to be clossed without iterupting the OR selection", func(t *testing.T) {
-		channelOps, reader := NewMergeRead(context.Background())
+		channelOps, reader := NewMergeRead[any](context.Background())
 
 		chanOne := make(chan any)
 		chanTwo := make(chan any)
@@ -55,7 +55,7 @@ func Test_MergeOrToOne(t *testing.T) {
 	})
 
 	t.Run("it properly exits if a channel recieved nil", func(t *testing.T) {
-		channelOps, reader := NewMergeRead(context.Background())
+		channelOps, reader := NewMergeRead[any](context.Background())
 
 		chanOne := make(chan any)
 		chanTwo := make(chan any)
@@ -73,7 +73,7 @@ func Test_MergeOrToOne(t *testing.T) {
 
 	t.Run("it cloeses the merged channel if the context is closed", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
-		channelOps, reader := NewMergeRead(ctx)
+		channelOps, reader := NewMergeRead[any](ctx)
 
 		chanOne := make(chan any)
 		chanTwo := make(chan any)
@@ -93,7 +93,7 @@ func Test_MergeOrToOne(t *testing.T) {
 		done := make(chan struct{})
 		wg := new(sync.WaitGroup)
 		counter := 10_000
-		channelOps, reader := NewMergeRead(context.Background())
+		channelOps, reader := NewMergeRead[any](context.Background())
 
 		channelOps.MergeOrToOne(nil)
 
@@ -123,7 +123,7 @@ func Test_MergeOrToOne(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 
-		channelOps, reader := NewMergeRead(ctx)
+		channelOps, reader := NewMergeRead[any](ctx)
 		g.Eventually(reader).Should(BeClosed())
 
 		chanOne := make(chan any)
@@ -137,7 +137,7 @@ func Test_MergeOrToOneIgnoreDuplicates(t *testing.T) {
 	g := NewGomegaWithT(t)
 
 	t.Run("it ensures only one possible channel is read from", func(t *testing.T) {
-		channelOps, reader := NewMergeRead(context.Background())
+		channelOps, reader := NewMergeRead[any](context.Background())
 
 		chanOne := make(chan any)
 		chanTwo := make(chan any)
@@ -164,7 +164,7 @@ func Test_MergeOrToOneIgnoreDuplicates(t *testing.T) {
 	})
 
 	t.Run("it allows for passed in channels to be clossed without iterupting the OR selection", func(t *testing.T) {
-		channelOps, reader := NewMergeRead(context.Background())
+		channelOps, reader := NewMergeRead[any](context.Background())
 
 		chanOne := make(chan any)
 		chanTwo := make(chan any)
@@ -180,7 +180,7 @@ func Test_MergeOrToOneIgnoreDuplicates(t *testing.T) {
 	})
 
 	t.Run("it properly exits if a channel recieved nil", func(t *testing.T) {
-		channelOps, reader := NewMergeRead(context.Background())
+		channelOps, reader := NewMergeRead[any](context.Background())
 
 		chanOne := make(chan any)
 		chanTwo := make(chan any)
@@ -198,7 +198,7 @@ func Test_MergeOrToOneIgnoreDuplicates(t *testing.T) {
 
 	t.Run("it cloeses the merged channel if the context is closed", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
-		channelOps, reader := NewMergeRead(ctx)
+		channelOps, reader := NewMergeRead[any](ctx)
 
 		chanOne := make(chan any)
 		chanTwo := make(chan any)
@@ -218,7 +218,7 @@ func Test_MergeOrToOneIgnoreDuplicates(t *testing.T) {
 		done := make(chan struct{})
 		wg := new(sync.WaitGroup)
 		counter := 10_000
-		channelOps, reader := NewMergeRead(context.Background())
+		channelOps, reader := NewMergeRead[any](context.Background())
 
 		channelOps.MergeOrToOneIgnoreDuplicates(nil)
 
@@ -246,8 +246,8 @@ func Test_MergeOrToOneIgnoreDuplicates(t *testing.T) {
 
 	t.Run("it only adds a channel once, no matter how many times it was attempted to be added", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
-		channelOpsBeforeCast, reader := NewMergeRead(ctx)
-		channelOps := channelOpsBeforeCast.(*mergeReadChannelOps)
+		channelOpsBeforeCast, reader := NewMergeRead[any](ctx)
+		channelOps := channelOpsBeforeCast.(*mergeReadChannelOps[any])
 
 		chanOne := make(chan any)
 
@@ -272,7 +272,7 @@ func Test_MergeOrToOneIgnoreDuplicates(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 
-		channelOps, reader := NewMergeRead(ctx)
+		channelOps, reader := NewMergeRead[any](ctx)
 		g.Eventually(reader).Should(BeClosed())
 
 		chanOne := make(chan any)
