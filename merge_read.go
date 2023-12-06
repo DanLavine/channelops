@@ -13,8 +13,9 @@ type mergeReadChannelOps[T any] struct {
 	stopOnce *sync.Once
 	doneOnce *sync.Once
 
-	orInterupt chan struct{}
-	orChan     chan T
+	stopOnClose bool
+	orInterupt  chan struct{}
+	orChan      chan T
 
 	cancelContextLength int
 	selectCases         []reflect.SelectCase
@@ -23,10 +24,14 @@ type mergeReadChannelOps[T any] struct {
 // Create a new single use channel operation for merging write channels. All functions
 // for this data type are thread safe to call asynchronously
 //
+//	PARAMETERS:
+//	- stopOnClose -Iff TRUE, any merged channels that are closed trigger the '<-chan T' ot be closed
+//	- cancelContexts - any contexts when canceled will close '<-chan T'
+//
 // Known limitations:
 //
 // 1. Only 65535 channels can be added to a single merge strategy. (There is a way to increase this, but untill I have an actual use case for that I think its fine)
-func NewMergeRead[T any](cancelContexts ...context.Context) (MergeReadChannelOps[T], <-chan T) {
+func NewMergeRead[T any](stopOnClose bool, cancelContexts ...context.Context) (MergeReadChannelOps[T], <-chan T) {
 	orInterupt := make(chan struct{})
 
 	// setup the interupt channel
@@ -46,8 +51,9 @@ func NewMergeRead[T any](cancelContexts ...context.Context) (MergeReadChannelOps
 		stopOnce: new(sync.Once),
 		doneOnce: new(sync.Once),
 
-		orInterupt: orInterupt,
-		orChan:     orChan,
+		stopOnClose: stopOnClose,
+		orInterupt:  orInterupt,
+		orChan:      orChan,
 
 		cancelContextLength: len(cancelContexts),
 		selectCases:         selectCases,
@@ -136,7 +142,7 @@ func (co *mergeReadChannelOps[T]) backgroundMergeOrToOne(cases []reflect.SelectC
 		co.stop()
 	} else {
 		// if this immediately recieves, then there is a race where new caller doesn't exit
-		if !received {
+		if !received && !co.stopOnClose {
 			// this is a case where the caller closed a channel. We need to remove the closed channel
 			co.lock.Lock()
 			co.selectCases[index] = co.selectCases[len(co.selectCases)-1] // copy last index into the one we want to drop from being closed
@@ -145,6 +151,9 @@ func (co *mergeReadChannelOps[T]) backgroundMergeOrToOne(cases []reflect.SelectC
 
 			// setup new bacground thread
 			go co.backgroundMergeOrToOne(co.selectCases)
+		} else if !received {
+			// stopped because a channel was closed
+			co.stop()
 		} else {
 			co.closeDone()
 
