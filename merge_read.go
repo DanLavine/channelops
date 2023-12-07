@@ -158,7 +158,7 @@ func (co *mergeReadChannelOps[T]) backgroundMergeOrToOne(cases []reflect.SelectC
 			co.closeDone()
 
 			// have a value to return the caller
-			if value.IsNil() {
+			if value.Interface() == nil {
 				// nothing to do here. the caller will be closed in the nil case
 				var empty T
 				co.orChan <- empty

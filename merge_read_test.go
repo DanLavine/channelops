@@ -8,6 +8,67 @@ import (
 	. "github.com/onsi/gomega"
 )
 
+func Test_SendingDefaultTypes(t *testing.T) {
+	g := NewGomegaWithT(t)
+
+	t.Run("It works with interface{}", func(t *testing.T) {
+		channelOps, reader := NewMergeRead[any](false, context.Background())
+
+		chanOne := make(chan any)
+		go func() {
+			chanOne <- "one"
+		}()
+
+		channelOps.MergeOrToOne(chanOne)
+
+		g.Eventually(reader).Should(Receive(Equal("one")))
+		g.Expect(reader).To(BeClosed())
+	})
+
+	t.Run("It works with struct{}", func(t *testing.T) {
+		channelOps, reader := NewMergeRead[struct{}](true, context.Background())
+
+		chanOne := make(chan struct{})
+		go func() {
+			chanOne <- struct{}{}
+		}()
+
+		channelOps.MergeOrToOne(chanOne)
+
+		g.Eventually(reader).Should(Receive(Equal(struct{}{})))
+		g.Expect(reader).To(BeClosed())
+	})
+
+	t.Run("It works with string", func(t *testing.T) {
+		channelOps, reader := NewMergeRead[string](true, context.Background())
+
+		chanOne := make(chan string)
+		go func() {
+			chanOne <- "other"
+		}()
+
+		channelOps.MergeOrToOne(chanOne)
+
+		g.Eventually(reader).Should(Receive(Equal("other")))
+		g.Expect(reader).To(BeClosed())
+	})
+
+	t.Run("It works with int", func(t *testing.T) {
+		channelOps, reader := NewMergeRead[int](true, context.Background())
+
+		chanOne := make(chan int)
+		go func() {
+			chanOne <- 3
+		}()
+
+		channelOps.MergeOrToOne(chanOne)
+
+		g.Eventually(reader).Should(Receive(Equal(3)))
+		g.Expect(reader).To(BeClosed())
+	})
+
+}
+
 func Test_MergeOrToOne(t *testing.T) {
 	g := NewGomegaWithT(t)
 
