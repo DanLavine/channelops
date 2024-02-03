@@ -21,16 +21,19 @@ type mergeReadChannelOps[T any] struct {
 	selectCases         []reflect.SelectCase
 }
 
-// Create a new single use channel operation for merging write channels. All functions
-// for this data type are thread safe to call asynchronously
-//
 //	PARAMETERS:
-//	- stopOnClose -Iff TRUE, any merged channels that are closed trigger the '<-chan T' ot be closed
+//	- stopOnClose -Iff TRUE, any merged channels that are closed trigger the '<-chan T' to be closed
 //	- cancelContexts - any contexts when canceled will close '<-chan T'
 //
-// Known limitations:
+//	RETURNS:
+//	- MergeReadChannelOps[T] - channel that additional readers can be added to.
+//	- <-chan T - channel that can be read from
 //
-// 1. Only 65535 channels can be added to a single merge strategy. (There is a way to increase this, but untill I have an actual use case for that I think its fine)
+// Create a new single use channel operation for merging any number of read channels into a single read operation.
+// Any channel that is successfuly read from will stop merged channel reader.
+//
+// Known limitations:
+// 1. Only (65535 - N context) channels can be added to a single merge strategy. (There is a way to increase this, with a timer. But untill I have an actual use case for that I think it is fine)
 func NewMergeRead[T any](stopOnClose bool, cancelContexts ...context.Context) (MergeReadChannelOps[T], <-chan T) {
 	orInterupt := make(chan struct{})
 
@@ -64,13 +67,22 @@ func NewMergeRead[T any](stopOnClose bool, cancelContexts ...context.Context) (M
 	return channelOps, orChan
 }
 
+// RETURNS:
+// - <-chan struct{} - channel to indicate if this merger read operation has processed and will no longer process
+//
+// Done can be used to detemerine if the channel has been read from and will no longer process anymore read operations
 func (co *mergeReadChannelOps[T]) Done() <-chan struct{} {
 	return co.done
 }
 
-// MergeOrToOne is able to merge any number of provided channels into a single channel
-// provided that none of the passed in channels have had a value read from them. At most
-// the provided mergeChan will only process one value from any provided orChans.
+//	PARAMETERS:
+//	- orChans - any number of channels to merge into the one reader
+//
+//	RETURNS:
+//	- error - error if the reader has already responded and stopped proccessing
+//
+// MergeOrToOne is able to merge any number of provided channels into the single channel
+// provided that none of the passed in channels have had a value read from them.
 //
 // This function is safe to call asyncronously.
 func (co *mergeReadChannelOps[T]) MergeOrToOne(orChans ...<-chan T) error {
@@ -96,8 +108,17 @@ func (co *mergeReadChannelOps[T]) MergeOrToOne(orChans ...<-chan T) error {
 	return nil
 }
 
-// MergeOrToOneIgnoreDuplicates is the same as MerOrToOne, but explicitly checks to make sure that all passed in
-// channels are not already being read from. Any that are will be ignored
+//	PARAMETERS:
+//	- orChans - any number of channels to merge into the one reader
+//
+//	RETURNS:
+//	- error - error if the reader has already responded and stopped proccessing
+//
+// MergeOrToOneIgnoreDuplicates is able to merge any number of provided channels into the single channel
+// provided that none of the passed in channels have had a value read from them. When adding channels,
+// the previous channels are compared to ensure that the same channel is not added multiple times.
+//
+// This function is safe to call asyncronously.
 func (co *mergeReadChannelOps[T]) MergeOrToOneIgnoreDuplicates(orChans ...<-chan T) error {
 	select {
 	case co.orInterupt <- struct{}{}:
