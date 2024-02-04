@@ -8,7 +8,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func Test_SendingDefaultTypes(t *testing.T) {
+func Test_MergeRead_SendingDefaultTypes(t *testing.T) {
 	g := NewGomegaWithT(t)
 
 	t.Run("It works with interface{}", func(t *testing.T) {
@@ -66,13 +66,12 @@ func Test_SendingDefaultTypes(t *testing.T) {
 		g.Eventually(reader).Should(Receive(Equal(3)))
 		g.Expect(reader).To(BeClosed())
 	})
-
 }
 
-func Test_MergeOrToOne(t *testing.T) {
+func Test_MergeRead_MergeOrToOne(t *testing.T) {
 	g := NewGomegaWithT(t)
 
-	t.Run("it ensures only one possible channel is read from", func(t *testing.T) {
+	t.Run("It can read from any of the channels merged", func(t *testing.T) {
 		channelOps, reader := NewMergeRead[any](false, context.Background())
 
 		chanOne := make(chan any)
@@ -207,7 +206,7 @@ func Test_MergeOrToOne(t *testing.T) {
 	})
 }
 
-func Test_MergeOrToOneIgnoreDuplicates(t *testing.T) {
+func Test_MergeRead_MergeOrToOneIgnoreDuplicates(t *testing.T) {
 	g := NewGomegaWithT(t)
 
 	t.Run("it ensures only one possible channel is read from", func(t *testing.T) {
