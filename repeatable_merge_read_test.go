@@ -375,13 +375,13 @@ func Test_RepeatableMergeRead_MergeOrToOneIgnoreDuplicates(t *testing.T) {
 
 		// ensure that whatever value we read in the merge, we can obtain the other value.
 		g.Expect(channelOps.MergeOrToOneIgnoreDuplicates(chanOne)).ToNot(HaveOccurred())
-		g.Expect(len(channelOps.(*repeatableMergeReadChannelOps[any]).selectCases)).To(Equal(3))
+		g.Expect(len(channelOps.selectCases)).To(Equal(3))
 
 		g.Expect(channelOps.MergeOrToOneIgnoreDuplicates(chanOne)).ToNot(HaveOccurred())
 		g.Expect(channelOps.MergeOrToOneIgnoreDuplicates(chanOne)).ToNot(HaveOccurred())
 		g.Expect(channelOps.MergeOrToOneIgnoreDuplicates(chanOne)).ToNot(HaveOccurred())
 		g.Expect(channelOps.MergeOrToOneIgnoreDuplicates(chanOne)).ToNot(HaveOccurred())
-		g.Expect(len(channelOps.(*repeatableMergeReadChannelOps[any]).selectCases)).To(Equal(3))
+		g.Expect(len(channelOps.selectCases)).To(Equal(3))
 
 		go func() {
 			chanOne <- "one"

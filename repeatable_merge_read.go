@@ -19,7 +19,7 @@ type Reapeater[T any] struct {
 	Stop func()
 }
 
-type repeatableMergeReadChannelOps[T any] struct {
+type RepeatableMergeReadChannelOps[T any] struct {
 	lock     *sync.Mutex
 	done     chan struct{}
 	stopOnce *sync.Once
@@ -40,7 +40,7 @@ type repeatableMergeReadChannelOps[T any] struct {
 //	- cancelContexts - any contexts when canceled will close '<-chan Reapeater[T]'
 //
 //	RETURNS:
-//	- repeatableMergeReadChannelOps[T] - channel op that additional readers can be added to.
+//	- RepeatableMergeReadChannelOps[T] - channel op that additional readers can be added to.
 //	- <-chan Reapeater[T] - struct that contains the value read from the channel. As well as the Continue of Stop operations for the channel op
 //
 // Create a new multiple use channel operation for merging any number of read channels into a single read operation.
@@ -49,7 +49,7 @@ type repeatableMergeReadChannelOps[T any] struct {
 //
 // Known limitations:
 // 1. Only (65535 - N context) channels can be added to a single merge strategy. (There is a way to increase this, with a timer. But untill I have an actual use case for that I think it is fine)
-func NewRepeatableMergeRead[T any](stopOnClose bool, cancelContexts ...context.Context) (RepeatableMergeReadChannelOps[T], <-chan Reapeater[T]) {
+func NewRepeatableMergeRead[T any](stopOnClose bool, cancelContexts ...context.Context) (*RepeatableMergeReadChannelOps[T], <-chan Reapeater[T]) {
 	orInterupt := make(chan struct{})
 
 	// setup the interupt channel
@@ -63,7 +63,7 @@ func NewRepeatableMergeRead[T any](stopOnClose bool, cancelContexts ...context.C
 	}
 
 	orChan := make(chan Reapeater[T], 1)
-	channelOps := &repeatableMergeReadChannelOps[T]{
+	channelOps := &RepeatableMergeReadChannelOps[T]{
 		lock:     new(sync.Mutex),
 		done:     make(chan struct{}),
 		stopOnce: new(sync.Once),
@@ -88,7 +88,7 @@ func NewRepeatableMergeRead[T any](stopOnClose bool, cancelContexts ...context.C
 // - <-chan struct{} - channel to indicate if this merger read operation has processed and will no longer process
 //
 // Done can be used to detemerine if the channel has been read from and will no longer process anymore read operations
-func (co *repeatableMergeReadChannelOps[T]) Done() <-chan struct{} {
+func (co *RepeatableMergeReadChannelOps[T]) Done() <-chan struct{} {
 	return co.done
 }
 
@@ -102,7 +102,7 @@ func (co *repeatableMergeReadChannelOps[T]) Done() <-chan struct{} {
 // provided that none of the passed in channels have had a value read from them.
 //
 // This function is safe to call asyncronously.
-func (co *repeatableMergeReadChannelOps[T]) MergeOrToOne(orChans ...<-chan T) error {
+func (co *RepeatableMergeReadChannelOps[T]) MergeOrToOne(orChans ...<-chan T) error {
 	select {
 	case co.orInterupt <- struct{}{}:
 		// try to trigger a stop if a goroutine is already running
@@ -136,7 +136,7 @@ func (co *repeatableMergeReadChannelOps[T]) MergeOrToOne(orChans ...<-chan T) er
 // the previous channels are compared to ensure that the same channel is not added multiple times.
 //
 // This function is safe to call asyncronously.
-func (co *repeatableMergeReadChannelOps[T]) MergeOrToOneIgnoreDuplicates(orChans ...<-chan T) error {
+func (co *RepeatableMergeReadChannelOps[T]) MergeOrToOneIgnoreDuplicates(orChans ...<-chan T) error {
 	select {
 	case co.orInterupt <- struct{}{}:
 		// try to trigger a stop if a goroutine is already running
@@ -171,7 +171,7 @@ func (co *repeatableMergeReadChannelOps[T]) MergeOrToOneIgnoreDuplicates(orChans
 	return nil
 }
 
-func (co *repeatableMergeReadChannelOps[T]) backgroundMergeOrToOne(cases []reflect.SelectCase) {
+func (co *RepeatableMergeReadChannelOps[T]) backgroundMergeOrToOne(cases []reflect.SelectCase) {
 	index, value, received := reflect.Select(cases)
 	if index == 0 {
 		// interupted since the caller wants to add more channels
@@ -221,15 +221,15 @@ func (co *repeatableMergeReadChannelOps[T]) backgroundMergeOrToOne(cases []refle
 	}
 }
 
-func (co *repeatableMergeReadChannelOps[T]) next() {
+func (co *RepeatableMergeReadChannelOps[T]) next() {
 	co.continueProcessing <- struct{}{}
 }
 
-func (co *repeatableMergeReadChannelOps[T]) halt() {
+func (co *RepeatableMergeReadChannelOps[T]) halt() {
 	co.stopProcessing <- struct{}{}
 }
 
-func (co *repeatableMergeReadChannelOps[T]) stop() {
+func (co *RepeatableMergeReadChannelOps[T]) stop() {
 	co.stopOnce.Do(func() {
 		close(co.done)
 		close(co.orChan)
